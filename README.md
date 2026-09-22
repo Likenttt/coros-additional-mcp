@@ -6,7 +6,7 @@ A Node.js 20+ TypeScript library and stdio MCP server for the unofficial COROS T
 
 This project is a **complement** to the [official COROS MCP endpoint](https://mcp.coros.com/mcp) and [`coroslab/COROS-MCP`](https://github.com/coroslab/COROS-MCP). It adds the one capability the official server does not provide: creating/importing an activity through `activity/fit/import`. The official MCP's activity tools are read-only (`querySportRecords`, `getActivityDetail`, and `downloadActivityFitFiles`); its write tools cover workouts and training plans. Run both servers side by side: use the official MCP for activity reads, workouts, and training plans, and use this server for activity uploads.
 
-The two servers cannot share authentication. The official MCP uses OAuth 2.0 with PKCE (issuers `mcp.coros.com`, `mcpcn.coros.com`, `mcpeu.coros.com`, and `mcpus.coros.com`; scopes `openid offline_access mcp.tools`) and sends `Authorization: Bearer` to its MCP gateway. This project calls the private Training Hub backend at `teamapi.coros.com` (with regional variants) and sends an `accesstoken` request header. The tokens have different audiences and header contracts, so an official COROS MCP token cannot be used here.
+The two servers authenticate separately: sign in to the official MCP as its documentation describes, and bridge a Training Hub browser session here with `coros-auth import-token`.
 
 > [!WARNING]
 > **Unofficial, unsupported, and use-at-your-own-risk.** This project is not affiliated with, endorsed by, or approved by COROS. COROS is a trademark of COROS Wearables, Inc.
