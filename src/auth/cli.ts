@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 
+import { realpathSync } from "node:fs";
 import { spawn } from "node:child_process";
 import type { Readable, Writable } from "node:stream";
 import { pathToFileURL } from "node:url";
@@ -449,6 +450,20 @@ async function main(): Promise<void> {
     process.exitCode = await runCorosAuthCli({ argv: process.argv.slice(2) });
 }
 
-if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+// npm's bin shim is a symlink on macOS/Linux, so argv[1] is the symlink path
+// while import.meta.url is the real file. A plain string compare never matches,
+// main() never runs, and the command exits 0 with no output. Compare real paths.
+function invokedDirectly(): boolean {
+    const entry = process.argv[1];
+    if (!entry) return false;
+    if (import.meta.url === pathToFileURL(entry).href) return true;
+    try {
+        return import.meta.url === pathToFileURL(realpathSync(entry)).href;
+    } catch {
+        return false;
+    }
+}
+
+if (invokedDirectly()) {
     void main();
 }

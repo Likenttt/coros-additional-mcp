@@ -1,6 +1,9 @@
+import { execFile } from "node:child_process";
+import { symlink, unlink } from "node:fs/promises";
 import { chmod, mkdtemp, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { promisify } from "node:util";
 import { Writable } from "node:stream";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { runCorosAuthCli } from "../src/auth/cli.ts";
@@ -13,6 +16,27 @@ import {
 import { CorosClient } from "../src/coros/client.ts";
 
 const originalFetch = globalThis.fetch;
+const execFileAsync = promisify(execFile);
+
+describe("cli entry guard", () => {
+    it("runs when invoked through a symlink, as npm's bin shim does", async () => {
+        // npm's bin shim is a symlink on macOS/Linux. Comparing import.meta.url to
+        // argv[1] directly never matches, so main() never ran and the command exited
+        // 0 with no output. The guard must resolve the real path.
+        const dir = await mkdtemp(join(tmpdir(), "coros-auth-symlink-"));
+        const link = join(dir, "coros-auth");
+        await symlink(join(process.cwd(), "dist/auth/cli.js"), link);
+        try {
+            const { stdout } = await execFileAsync(process.execPath, [link, "status"], {
+                env: { ...process.env, HOME: dir },
+            });
+            expect(stdout).toContain("authSource=none");
+            expect(stdout).toContain("valid=no");
+        } finally {
+            await unlink(link);
+        }
+    });
+});
 
 afterEach(() => {
     globalThis.fetch = originalFetch;
