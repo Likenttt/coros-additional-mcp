@@ -299,6 +299,9 @@ async function runEgoBrowser(
             env,
             stdio: ["ignore", "pipe", "pipe"],
         });
+        // ego-browser relays script `console.log` output on stderr, not stdout,
+        // so both streams are captured. Neither is ever echoed: the captured text
+        // contains the session token.
         let stdout = "";
         let settled = false;
         let timedOut = false;
@@ -314,7 +317,7 @@ async function runEgoBrowser(
             child.kill("SIGKILL");
         }, BROWSER_TIMEOUT_MS);
 
-        child.stdout.on("data", (chunk: Buffer | string) => {
+        const collect = (chunk: Buffer | string): void => {
             if (outputTooLarge) return;
             stdout += chunk.toString();
             if (Buffer.byteLength(stdout, "utf8") > MAX_BROWSER_OUTPUT_BYTES) {
@@ -322,9 +325,9 @@ async function runEgoBrowser(
                 stdout = "";
                 child.kill("SIGKILL");
             }
-        });
-        // Drain diagnostics but never relay them: browser output may contain a token.
-        child.stderr.resume();
+        };
+        child.stdout.on("data", collect);
+        child.stderr.on("data", collect);
         child.on("error", (error: NodeJS.ErrnoException) => finish(() => {
             if (error.code === "ENOENT") {
                 reject(new CliUsageError(

@@ -39,11 +39,11 @@ function capture() {
     return { stream, text: () => value };
 }
 
-async function fakeEgoBrowserEnvironment(home: string, stdout: string) {
+async function fakeEgoBrowserEnvironment(home: string, stdout: string, stream: "stdout" | "stderr" = "stdout") {
     const bin = await mkdtemp(join(tmpdir(), "fake-ego-browser-"));
     const executable = join(bin, "ego-browser");
     await writeFile(executable, `#!/usr/bin/env node
-process.stdout.write(process.env.FAKE_EGO_STDOUT || "");
+process[process.env.FAKE_EGO_STREAM || "stdout"].write(process.env.FAKE_EGO_STDOUT || "");
 process.exit(Number(process.env.FAKE_EGO_EXIT_CODE || "0"));
 `, { mode: 0o755 });
     await chmod(executable, 0o755);
@@ -51,6 +51,7 @@ process.exit(Number(process.env.FAKE_EGO_EXIT_CODE || "0"));
         HOME: home,
         PATH: `${bin}:${process.env.PATH ?? ""}`,
         FAKE_EGO_STDOUT: stdout,
+        FAKE_EGO_STREAM: stream,
     };
 }
 
@@ -222,6 +223,33 @@ describe("coros-auth import-token --from-browser", () => {
         expect((await readTokenFile(defaultTokenFilePath(env)))?.accessToken).toBe(token);
         expect(output.text() + errors.text()).not.toContain(token);
         expect(output.text()).not.toContain("ego-browser:notice");
+    });
+
+    it("reads the result when ego-browser relays script output on stderr", async () => {
+        // ego-browser prints script `console.log` output on stderr, so a
+        // stdout-only reader silently finds no result. Verified against the real
+        // binary on 2026-09.
+        const token = "stderr-relayed-secret";
+        const home = await mkdtemp(join(tmpdir(), "coros-browser-stderr-"));
+        const env = await fakeEgoBrowserEnvironment(
+            home,
+            `COROS_AUTH_BROWSER_RESULT=${JSON.stringify({ token, regionId: "2" })}\n`,
+            "stderr",
+        );
+        const output = capture();
+        const errors = capture();
+
+        const exitCode = await runCorosAuthCli({
+            argv: ["import-token", "--from-browser", "--region", "cn"],
+            env,
+            output: output.stream,
+            errorOutput: errors.stream,
+            validateToken: async () => ({ userId: "browser-user", regionId: 2, region: "cn" }),
+        });
+
+        expect(exitCode).toBe(0);
+        expect((await readTokenFile(defaultTokenFilePath(env)))?.accessToken).toBe(token);
+        expect(output.text() + errors.text()).not.toContain(token);
     });
 
     it("explains how to recover when the browser cookie is missing", async () => {
