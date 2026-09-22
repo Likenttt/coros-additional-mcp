@@ -1,6 +1,6 @@
 ---
 name: coros-upload
-description: 将本地 FIT/TCX 活动文件上传到高驰 COROS 账号，或按 labelId 下载 FIT/TCX/GPX/KML/CSV。适用于从佳明或其他设备迁移活动、补录漏传活动和导出备份。不用于查询训练负荷或健康数据；这些查询请使用官方 COROS MCP。
+description: 将本地 FIT/TCX 活动文件上传到高驰 COROS 账号，或按 labelId 下载 FIT/TCX/GPX/KML/CSV。适用于从佳明或其他设备迁移活动、补录漏传活动和导出备份。批量上传前必须按活动原始时区分组，境外活动要单独传 timezone，否则开始时间会静默平移。不用于查询训练负荷或健康数据；这些查询请使用官方 COROS MCP。
 ---
 
 # COROS 活动上传
@@ -39,11 +39,24 @@ npx -y --package coros-additional-mcp coros-auth import-token --region cn
 ## 工具选择
 
 - `check_coros_auth`：开始前查看认证来源、区域和用户 ID，不暴露 token。
-- `upload_activity`：明确确认后上传一个绝对路径的 `.fit`/`.tcx`，或其 base64 内容。
+- `upload_activity`：明确确认后上传一个绝对路径的 `.fit`/`.tcx`，或其 base64 内容。批量迁移前先按下面的时区规则分组，不要省略 `timezone`。
 - `list_import_jobs`：上传后查看导入任务是否完成或仍在处理。
 - `delete_import_job`：用户明确要求时，按 ID 从导入列表移除任务。
 - `download_activity`：按 `labelId` 下载 FIT/TCX/GPX/KML/CSV 到本地，只返回路径。`sportType` 用活动列表里的值，跑类以外不要省略。
 - `list_activities`：**仅**核对刚上传的活动，或查出下载所需的 `labelId`；日常活动查询使用官方 MCP 的 `querySportRecords`。
+
+## 时区：省略就会静默平移
+
+`upload_activity` 的 `timezone` 单位是 **15 分钟**，不是小时。UTC+8 是 `32`，UTC+0 是 `0`，UTC-5 是 `-20`。不传时，用的是**这台电脑当前时区**，不是 FIT 里的活动时区。
+
+高驰导入不会因此报错。境外活动若按本机时区上传，开始时间会静默平移，训练负荷和日历都会错。
+
+批量迁移前必须先扫完源清单，再上传：
+
+1. 从佳明或其他来源读出每条活动的本地开始时间和时区偏移，不要只看文件名日期。
+2. 按偏移分组。和本机时区相同的可以不传 `timezone`；其余每组单独传，并显式带上对应的 15 分钟偏移。
+3. 一条活动一个偏移。不要用一个 `timezone` 传完混合清单。
+4. 扫完后把分组数量告诉用户，确认后再传。传完抽查一条境外活动的开始时间，对不上就停止，不要继续。
 
 ## 分阶段授权与写入确认
 
