@@ -29,6 +29,7 @@ import {
     type FileTypeKey,
     MAX_PAGE_SIZE,
     OBJECT_STORAGE_CONFIG_BY_REGION,
+    REGION_ID_BY_REGION,
     regionFromId,
     SPORT_TYPE_API_VALUES,
     type SportTypeKey,
@@ -185,19 +186,23 @@ export class CorosClient {
             throw error;
         }
 
+        if (!account.userId) throw invalidSessionError();
+
+        // `account/query` does not carry `regionId` — the web app keeps the region
+        // in its own `CPL-coros-region` cookie. Fall back to the configured region
+        // when the field is absent instead of rejecting a perfectly valid session.
         const rawRegionId = account.regionId;
-        if ((typeof rawRegionId !== "number" && typeof rawRegionId !== "string") || !account.userId) {
-            throw invalidSessionError();
-        }
-        let region: ApiRegion;
-        try {
-            region = regionFromId(rawRegionId);
-        } catch {
-            throw invalidSessionError();
+        let region = this.uploadRegion;
+        if (typeof rawRegionId === "number" || typeof rawRegionId === "string") {
+            try {
+                region = regionFromId(rawRegionId);
+            } catch {
+                throw invalidSessionError();
+            }
         }
         this.baseUrl = BASE_URL_BY_REGION[region];
         this.uploadRegion = region;
-        return { userId: String(account.userId), regionId: Number(rawRegionId), region };
+        return { userId: String(account.userId), regionId: REGION_ID_BY_REGION[region], region };
     }
 
     /** Current API/storage region, updated from login or session validation. */

@@ -71,6 +71,9 @@ export const OBJECT_STORAGE_CONFIG_BY_REGION: Record<ApiRegion, ObjectStorageCon
 
 const REGION_BY_ID: Record<number, ApiRegion> = { 1: "en", 2: "cn", 3: "eu" };
 
+/** Inverse of {@link REGION_BY_ID}, matching the web app's `CPL-coros-region` cookie. */
+export const REGION_ID_BY_REGION: Record<ApiRegion, number> = { en: 1, cn: 2, eu: 3 };
+
 /** Map the region id returned by account/login to this library's region key. */
 export function regionFromId(regionId: number | string): ApiRegion {
     const numericId = typeof regionId === "string" ? Number(regionId) : regionId;
