@@ -58,15 +58,7 @@ args = ["-y", "coros-additional-mcp"]
 npx -y --package coros-additional-mcp coros-auth import-token --region cn
 ```
 
-在隐藏 stdin 提示粘贴 token 并回车。CLI 会先向 COROS 验证 token，再写入默认的 `~/.coros-additional-mcp/session.json`；目录权限为 `0700`，文件权限为 `0600`。Cookie 的有效区域若与 `--region` 冲突，以 Cookie 为准并发出警告。
-
-已安装 `ego-browser` 时，可在用户授权后由 CLI 从已登录页面读取 Cookie：
-
-```bash
-npx -y --package coros-additional-mcp coros-auth import-token --from-browser --region cn
-```
-
-`ego-browser` 不是包依赖。它缺失、未登录或失败时，使用上面的手动导入，不要尝试密码登录或要求用户在对话中提供密码。
+在隐藏 stdin 提示粘贴 token 并回车。CLI 会先向 COROS 验证 token，再写入默认的 `~/.coros-additional-mcp/session.json`；目录权限为 `0700`，文件权限为 `0600`。
 
 可检查本地会话文件状态：
 

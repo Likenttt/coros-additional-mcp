@@ -26,17 +26,13 @@ description: 将本地 FIT/TCX 活动文件上传或导入到高驰 COROS 账号
 
 ## 认证：仅保存浏览器会话
 
-认证前单独取得“打开浏览器/读取 Cookie 并写入本地会话文件”的授权。默认手动导入（推荐，且不依赖额外软件）：
+认证前单独取得“打开浏览器/读取 Cookie 并写入本地会话文件”的授权。从已登录的浏览器把会话 token 桥接过来：
 
 ```bash
 npx -y --package coros-additional-mcp coros-auth import-token --region cn
 ```
 
-将 `cn` 换成 `en` 或 `eu`；在隐藏提示中粘贴 token，绝不把 token 放入命令行或对话。可选自动读取已登录 Training Hub Cookie（需要 `ego-browser`；未安装就回到手动方式）：
-
-```bash
-npx -y --package coros-additional-mcp coros-auth import-token --from-browser --region cn
-```
+将 `cn` 换成 `en` 或 `eu`；在隐藏提示中粘贴 token，绝不把 token 放入命令行或对话。
 
 手动取得 token：登录对应 Training Hub，打开 DevTools 的 **Application/Storage → Cookies**，复制 **仅** `CPL-coros-token` 的值；`CPL-coros-region` 映射为 `1=en`、`2=cn`、`3=eu`。密码不会落地；仅验证后的会话文件会保存，目录为 `0700`、文件为 `0600`。
 
