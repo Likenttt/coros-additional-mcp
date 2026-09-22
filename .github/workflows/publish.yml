@@ -19,6 +19,9 @@ jobs:
           node-version: 22
           registry-url: https://registry.npmjs.org
           cache: npm
+      # Trusted publishing needs npm 11+. Node 22 still ships npm 10, which can
+      # sign provenance but then PUT the package as an anonymous user (404).
+      - run: npm install -g npm@11
       - run: npm ci
       - run: npx tsc --noEmit
       - run: npm test
