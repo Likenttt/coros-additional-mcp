@@ -1,9 +1,29 @@
 {
   "name": "coros-additional-mcp",
   "version": "0.1.0",
-  "description": "Node.js TypeScript client for the unofficial COROS Training Hub API",
+  "description": "Unofficial COROS Training Hub API client and MCP server for activity uploads",
+  "keywords": [
+    "coros",
+    "mcp",
+    "model-context-protocol",
+    "fit",
+    "tcx",
+    "activity",
+    "upload",
+    "training-hub",
+    "garmin"
+  ],
+  "author": "Li Chuan Yi <chuanyi.work@gmail.com>",
   "type": "module",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Likenttt/coros-additional-mcp.git"
+  },
+  "homepage": "https://github.com/Likenttt/coros-additional-mcp#readme",
+  "bugs": {
+    "url": "https://github.com/Likenttt/coros-additional-mcp/issues"
+  },
   "engines": {
     "node": ">=20"
   },
@@ -23,12 +43,15 @@
   "files": [
     "dist",
     "LICENSE",
-    "README.md"
+    "README.md",
+    "README.zh-CN.md"
   ],
   "scripts": {
     "build": "tsup src/index.ts src/mcp/index.ts src/auth/cli.ts --format esm --dts --clean",
     "typecheck": "tsc --noEmit",
-    "test": "vitest run"
+    "test": "vitest run",
+    "prepublishOnly": "npm run typecheck && npm test && npm run build",
+    "pack:smoke": "node scripts/pack-smoke.mjs"
   },
   "devDependencies": {
     "tsup": "^8.5.0",
