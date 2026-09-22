@@ -1,6 +1,6 @@
 {
   "name": "coros-additional-mcp",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "description": "Unofficial COROS Training Hub API client and MCP server for activity uploads",
   "keywords": [
     "coros",
