@@ -1,5 +1,5 @@
 import { execFile } from "node:child_process";
-import { symlink, unlink } from "node:fs/promises";
+import { access, symlink, unlink } from "node:fs/promises";
 import { chmod, mkdtemp, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -23,9 +23,15 @@ describe("cli entry guard", () => {
         // npm's bin shim is a symlink on macOS/Linux. Comparing import.meta.url to
         // argv[1] directly never matches, so main() never ran and the command exited
         // 0 with no output. The guard must resolve the real path.
+        const cli = join(process.cwd(), "dist/auth/cli.js");
+        try {
+            await access(cli);
+        } catch {
+            await execFileAsync("npm", ["run", "build"], { cwd: process.cwd() });
+        }
         const dir = await mkdtemp(join(tmpdir(), "coros-auth-symlink-"));
         const link = join(dir, "coros-auth");
-        await symlink(join(process.cwd(), "dist/auth/cli.js"), link);
+        await symlink(cli, link);
         try {
             const { stdout } = await execFileAsync(process.execPath, [link, "status"], {
                 env: { ...process.env, HOME: dir },
