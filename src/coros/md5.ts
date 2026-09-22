@@ -3,7 +3,7 @@
  *
  * Web Crypto has no MD5 and `node:crypto` is unavailable in the browser, so the
  * implementation is vendored: `deno_std@0.160.0/hash/md5.ts`, unchanged apart
- * from formatting and the wrapper. See NOTICE.
+ * from formatting and the wrapper. See the Attribution section in README.md.
  *
  * Copyright 2018-2022 the Deno authors. All rights reserved. MIT license.
  *

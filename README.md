@@ -131,6 +131,8 @@ For a checked-out repository, replace `npx` and its arguments with the absolute 
 
 ## Attribution
 
-This project is a derivative of [`Pinta365/coros`](https://github.com/Pinta365/coros), Copyright (c) 2026 Pinta365, used under the MIT License. The original source is retained under `src/coros/`; see [LICENSE](LICENSE) and [NOTICE](NOTICE).
+This project is a derivative of [`Pinta365/coros`](https://github.com/Pinta365/coros) (revision `240ac18`), Copyright (c) 2026 Pinta365, used under the MIT License — see [LICENSE](LICENSE). That source is retained under `src/coros/`, adapted from Deno-first TypeScript to a Node.js 20+ package.
 
-The mainland-China region flow was independently implemented in TypeScript by referring to the public implementation approach in [`XiaoSiHwang/garmin-sync-coros`](https://github.com/XiaoSiHwang/garmin-sync-coros). No source files from that unlicensed repository are copied into this project.
+`src/coros/md5.ts` carries the MD5 implementation from the Deno standard library, as vendored by `Pinta365/coros` and changed only in formatting, exported wrappers, and a narrowed parameter type. MD5 has no Web Crypto equivalent, so a userland implementation is required.
+
+Big thanks to [XiaoSiHwang](https://github.com/XiaoSiHwang) (四哥), whose [`garmin-sync-coros`](https://github.com/XiaoSiHwang/garmin-sync-coros) worked out the mainland-China upload path first. This project follows that approach and reimplements it in TypeScript — the code here is written from scratch, not copied.
