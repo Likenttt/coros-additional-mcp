@@ -1,5 +1,7 @@
 # coros-additional-mcp
 
+English | **[中文](README.zh-CN.md)**
+
 A Node.js 20+ TypeScript library and stdio MCP server for the unofficial COROS Training Hub API. It supports account/activity APIs and FIT/TCX uploads to the region-appropriate AWS S3 or mainland-China Aliyun OSS bucket.
 
 ## A complement to the official COROS MCP
