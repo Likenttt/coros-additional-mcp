@@ -77,7 +77,7 @@ coros-auth status
 
 Credential priority is `COROS_ACCESS_TOKEN` → `COROS_TOKEN_FILE` → default token file → email/password. Authentication is lazy: the server starts and lists all tools with no credentials, while authenticated tools validate or log in on first use. `check_coros_auth` reports `authSource`, region, and user ID without printing or validating the token.
 
-The server registers six tools:
+The server registers activity tools and a two-lane migration ledger. The ledger does not talk to Garmin or COROS by itself. Pair it with `dsh-plugin-garmin-connect`: that plugin downloads a Garmin FIT, and this server uploads it to COROS. Progress for the two directions is stored separately in `~/.coros-additional-mcp/migration.json`.
 
 - `check_coros_auth` — report auth source, in-memory login state, region, and user ID (never the token).
 - `upload_activity` — upload an absolute local `.fit`/`.tcx` file or base64 content. Files are limited to 50 MB. An import status other than `2` means it may still be processing; query `list_import_jobs`.
@@ -85,6 +85,8 @@ The server registers six tools:
 - `delete_import_job` — remove an import job by ID.
 - `download_activity` — download one activity as FIT, TCX, GPX, KML, or CSV. `labelId` and `sportType` come from `list_activities`. The file is written locally with mode `0600`; the tool returns the path, not the bytes.
 - `list_activities` — check that a newly uploaded activity appeared, and look up the `labelId` needed for download. For routine activity queries, use the official MCP's `querySportRecords` tool instead.
+- `migration_status` / `migration_enqueue` / `migration_next` / `migration_record` — queue ids, take one due step, and record it. A success waits 45–85 seconds. A failure backs off from 30 seconds, doubling each attempt, capped at 15 minutes. Do not upload a second file while `migration_next` says to wait.
+- `migration_locate_garmin_fit` — resolve `{activityId}.fit` under `GARMIN_FIT_DOWNLOAD_DIR` after the Garmin plugin downloads it.
 
 ### Getting `CPL-coros-token` from the browser
 

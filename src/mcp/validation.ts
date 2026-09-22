@@ -62,6 +62,37 @@ export const downloadActivityInputSchema = z.object({
     }
 });
 
+export const migrationLaneSchema = z.enum(["garmin_to_coros", "coros_to_garmin"]);
+
+export const migrationEnqueueInputSchema = z.object({
+    lane: migrationLaneSchema.describe("garmin_to_coros or coros_to_garmin. The two lanes keep separate progress."),
+    items: z.array(z.object({
+        id: z.string().min(1).max(80).describe("Garmin activityId or COROS labelId."),
+        sourceDate: z.iso.date().optional(),
+        title: z.string().max(120).optional(),
+    })).min(1).max(20).describe("At most 20 ids. Do not enqueue an entire history in one call."),
+});
+
+export const migrationNextInputSchema = z.object({
+    lane: migrationLaneSchema.optional().describe("Omit to let the ledger choose the lane that has been idle longer."),
+});
+
+export const migrationRecordInputSchema = z.object({
+    lane: migrationLaneSchema,
+    id: z.string().min(1).max(80),
+    outcome: z.enum(["downloaded", "succeeded", "failed", "skipped"]),
+    remoteId: z.string().max(80).optional().describe("COROS importId or Garmin activity id after a successful write."),
+    fileName: z.string().max(120).optional(),
+    sha256: z.string().regex(/^[a-f0-9]{64}$/).optional(),
+    localPath: z.string().min(1).optional().describe("Absolute path returned by download_activity or migration_locate_garmin_fit."),
+    error: z.string().max(300).optional(),
+});
+
+export const migrationLocateInputSchema = z.object({
+    activityId: z.string().regex(/^\d+$/).describe("Garmin activity id. The file is expected as {activityId}.fit."),
+    sha256: z.string().regex(/^[a-f0-9]{64}$/).optional(),
+});
+
 export const checkCorosAuthInputSchema = z.object({});
 
 export type UploadActivityInput = z.infer<typeof uploadActivityInputSchema>;

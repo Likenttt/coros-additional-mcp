@@ -10,11 +10,23 @@ import {
 } from "../auth/token-store.ts";
 import { formatToolError } from "./errors.ts";
 import {
+    enqueueMigration,
+    migrationSummary,
+    nextMigration,
+    recordMigration,
+    type MigrationLane,
+} from "./migration.ts";
+import { loadMigrationState, locateGarminFit, migrationFilePath, saveMigrationState } from "./migration-store.ts";
+import {
     checkCorosAuthInputSchema,
     deleteImportJobInputSchema,
     downloadActivityInputSchema,
     listActivitiesInputSchema,
     listImportJobsInputSchema,
+    migrationEnqueueInputSchema,
+    migrationLocateInputSchema,
+    migrationNextInputSchema,
+    migrationRecordInputSchema,
     readValidatedActivityFile,
     uploadActivityInputSchema,
     writeDownloadedActivity,
@@ -135,6 +147,76 @@ export class CorosSession {
         });
     }
 
+    async migrationStatus(): Promise<unknown> {
+        const state = await loadMigrationState(this.migrationPath());
+        return migrationSummary(state);
+    }
+
+    async migrationEnqueue(input: { lane: MigrationLane; items: Array<{ id: string; sourceDate?: string; title?: string }> }): Promise<unknown> {
+        const path = this.migrationPath();
+        const loaded = await loadMigrationState(path);
+        const result = enqueueMigration(loaded, input.lane, input.items);
+        await saveMigrationState(path, result.state);
+        return {
+            lane: input.lane,
+            added: result.added,
+            alreadyKnown: result.alreadyKnown,
+            droppedBecauseBatchLimit: Math.max(0, input.items.length - 20),
+            summary: migrationSummary(result.state),
+        };
+    }
+
+    async migrationNext(lane?: MigrationLane): Promise<unknown> {
+        const path = this.migrationPath();
+        const loaded = await loadMigrationState(path);
+        const result = nextMigration(loaded, lane);
+        await saveMigrationState(path, result.state);
+        return {
+            action: result.action,
+            waitMs: result.waitMs,
+            lane: result.lane ?? null,
+            item: result.item ?? null,
+            instruction: result.instruction,
+            summary: migrationSummary(result.state),
+        };
+    }
+
+    async migrationRecord(input: {
+        lane: MigrationLane;
+        id: string;
+        outcome: "downloaded" | "succeeded" | "failed" | "skipped";
+        remoteId?: string;
+        fileName?: string;
+        sha256?: string;
+        localPath?: string;
+        error?: string;
+    }): Promise<unknown> {
+        const path = this.migrationPath();
+        const loaded = await loadMigrationState(path);
+        let localPath = input.localPath;
+        if (input.outcome === "downloaded" && input.lane === "garmin_to_coros" && input.fileName) {
+            const located = await locateGarminFit(this.garminFitRoot(), input.id, input.sha256);
+            localPath = located.filePath;
+        }
+        const state = recordMigration(loaded, { ...input, localPath });
+        await saveMigrationState(path, state);
+        return { item: state.lanes[input.lane].items[input.id], summary: migrationSummary(state) };
+    }
+
+    async migrationLocate(input: { activityId: string; sha256?: string }): Promise<unknown> {
+        return await locateGarminFit(this.garminFitRoot(), input.activityId, input.sha256);
+    }
+
+    private migrationPath(): string {
+        return migrationFilePath(this.options.env ?? process.env);
+    }
+
+    private garminFitRoot(): string {
+        const root = (this.options.env ?? process.env).GARMIN_FIT_DOWNLOAD_DIR?.trim();
+        if (!root) throw new Error("GARMIN_FIT_DOWNLOAD_DIR is not set. Configure it for dsh-plugin-garmin-connect first.");
+        return root;
+    }
+
     async listActivities(options: { page: number; size: number; from?: string; to?: string; modeList?: string }): Promise<unknown> {
         const query: ActivityQueryOptions = {
             page: options.page,
@@ -215,6 +297,31 @@ export function createCorosMcpServer(options: CorosMcpOptions = {}): McpServer {
         description: "Download one COROS activity as FIT, TCX, GPX, KML, or CSV. labelId and sportType come from list_activities. Writes an owner-only local file and returns its path, never the file bytes.",
         inputSchema: downloadActivityInputSchema,
     }, async (input) => execute(() => session.downloadActivity(input), () => session.getSensitiveValues()));
+
+    server.registerTool("migration_status", {
+        description: "Show separate Garmin-to-COROS and COROS-to-Garmin progress, including how long to wait before the next write. This does not contact either service.",
+        inputSchema: checkCorosAuthInputSchema,
+    }, async () => execute(() => session.migrationStatus(), () => session.getSensitiveValues()));
+
+    server.registerTool("migration_enqueue", {
+        description: "Queue up to 20 activity ids on one migration lane. This only records intent. It does not download or upload anything.",
+        inputSchema: migrationEnqueueInputSchema,
+    }, async (input) => execute(() => session.migrationEnqueue(input), () => session.getSensitiveValues()));
+
+    server.registerTool("migration_next", {
+        description: "Claim the next single migration step, or return waitMs when a human-like pause or exponential backoff is still active. Never call this in a tight loop, and never upload more than the one item it returns.",
+        inputSchema: migrationNextInputSchema,
+    }, async ({ lane }) => execute(() => session.migrationNext(lane), () => session.getSensitiveValues()));
+
+    server.registerTool("migration_record", {
+        description: "Record the result of the one step returned by migration_next. downloaded schedules a pause before the upload. failed applies exponential backoff to that item and to the next action.",
+        inputSchema: migrationRecordInputSchema,
+    }, async (input) => execute(() => session.migrationRecord(input), () => session.getSensitiveValues()));
+
+    server.registerTool("migration_locate_garmin_fit", {
+        description: "Find one Garmin FIT file already downloaded by dsh-plugin-garmin-connect under GARMIN_FIT_DOWNLOAD_DIR. Returns the local path for upload_activity. Does not contact Garmin.",
+        inputSchema: migrationLocateInputSchema,
+    }, async (input) => execute(() => session.migrationLocate(input), () => session.getSensitiveValues()));
 
     server.registerTool("list_activities", {
         description: "Check whether a newly uploaded activity appeared in COROS. For routine activity queries, use the official COROS MCP querySportRecords tool instead.",
