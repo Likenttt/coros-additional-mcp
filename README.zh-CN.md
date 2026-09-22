@@ -77,13 +77,14 @@ coros-auth status
 
 凭据优先级为 `COROS_ACCESS_TOKEN` → `COROS_TOKEN_FILE` → 默认令牌文件 → 邮箱/密码。认证是懒加载的：服务器在没有凭据时也能启动并列出所有工具，而需要认证的工具会在首次使用时校验或登录。`check_coros_auth` 会报告 `authSource`、区域和用户 ID，但不会打印或校验令牌。
 
-服务器注册了五个工具：
+服务器注册了六个工具：
 
 - `check_coros_auth` — 报告认证来源、内存中的登录状态、区域和用户 ID（绝不返回令牌）。
 - `upload_activity` — 上传本地绝对路径的 `.fit`/`.tcx` 文件，或 base64 内容。文件上限 50 MB。导入状态不是 `2` 表示可能仍在处理中，可查询 `list_import_jobs`。
 - `list_import_jobs` — 列出最近的活动导入任务。
 - `delete_import_job` — 按 ID 删除一个导入任务。
-- `list_activities` — 检查新上传的活动是否已出现。日常的活动查询请改用官方 MCP 的 `querySportRecords` 工具。
+- `download_activity` — 把一条活动下载为 FIT、TCX、GPX、KML 或 CSV。`labelId` 和 `sportType` 来自 `list_activities`。文件以 `0600` 写到本地，工具只返回路径，不返回文件内容。
+- `list_activities` — 检查新上传的活动是否已出现，并查出下载所需的 `labelId`。日常的活动查询请改用官方 MCP 的 `querySportRecords` 工具。
 
 ### 从浏览器获取 `CPL-coros-token`
 

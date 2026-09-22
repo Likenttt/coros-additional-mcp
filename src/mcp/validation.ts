@@ -1,5 +1,6 @@
-import { stat } from "node:fs/promises";
-import { extname } from "node:path";
+import { mkdir, stat, writeFile } from "node:fs/promises";
+import { homedir } from "node:os";
+import { dirname, extname, join } from "node:path";
 import { z } from "zod";
 
 export const MAX_ACTIVITY_FILE_BYTES = 50 * 1024 * 1024;
@@ -50,9 +51,44 @@ export const listActivitiesInputSchema = z.object({
     modeList: z.string().min(1).optional().describe("Optional raw comma-separated COROS API sport values."),
 });
 
+export const downloadActivityInputSchema = z.object({
+    labelId: z.string().min(1).describe("Activity labelId from list_activities."),
+    sportType: z.union([z.int(), z.string().min(1)]).optional().describe("Sport type from the activity list item. Defaults to running."),
+    fileType: z.enum(["fit", "tcx", "gpx", "kml", "csv"]).optional().default("fit").describe("Export format. Defaults to fit."),
+    outputPath: z.string().min(1).optional().describe("Absolute path to write. Defaults to ~/.coros-additional-mcp/downloads/{labelId}.{fileType}."),
+}).superRefine((value, ctx) => {
+    if (value.outputPath !== undefined && !isAbsolutePath(value.outputPath)) {
+        ctx.addIssue({ code: "custom", path: ["outputPath"], message: "outputPath must be an absolute path." });
+    }
+});
+
 export const checkCorosAuthInputSchema = z.object({});
 
 export type UploadActivityInput = z.infer<typeof uploadActivityInputSchema>;
+export type DownloadActivityInput = z.infer<typeof downloadActivityInputSchema>;
+
+export async function writeDownloadedActivity(
+    bytes: Uint8Array,
+    input: Pick<DownloadActivityInput, "labelId" | "fileType" | "outputPath">,
+    env: Record<string, string | undefined> = process.env,
+): Promise<{ filePath: string; bytes: number; fileType: DownloadActivityInput["fileType"] }> {
+    const fileType = input.fileType ?? "fit";
+    const filePath = input.outputPath ?? join(downloadDirectory(env), `${safeFileStem(input.labelId)}.${fileType}`);
+    if (!isAbsolutePath(filePath)) throw new Error("outputPath must be an absolute path.");
+    await mkdir(dirname(filePath), { recursive: true, mode: 0o700 });
+    await writeFile(filePath, bytes, { mode: 0o600 });
+    return { filePath, bytes: bytes.byteLength, fileType };
+}
+
+function downloadDirectory(env: Record<string, string | undefined>): string {
+    const home = env.HOME?.trim() || env.USERPROFILE?.trim() || homedir();
+    return join(home, ".coros-additional-mcp", "downloads");
+}
+
+function safeFileStem(labelId: string): string {
+    const stem = labelId.replace(/[^A-Za-z0-9._-]/g, "_");
+    return stem.length > 0 ? stem : "activity";
+}
 
 export async function readValidatedActivityFile(input: UploadActivityInput): Promise<{ bytes: Uint8Array; filename: string }> {
     if (input.filePath !== undefined) {

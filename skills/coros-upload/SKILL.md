@@ -1,6 +1,6 @@
 ---
 name: coros-upload
-description: 将本地 FIT/TCX 活动文件上传或导入到高驰 COROS 账号；适用于从佳明或其他设备迁移活动、补录漏传活动和批量导入历史数据。不用于查询活动、训练负荷或健康数据；这些查询请使用官方 COROS MCP。
+description: 将本地 FIT/TCX 活动文件上传到高驰 COROS 账号，或按 labelId 下载 FIT/TCX/GPX/KML/CSV。适用于从佳明或其他设备迁移活动、补录漏传活动和导出备份。不用于查询训练负荷或健康数据；这些查询请使用官方 COROS MCP。
 ---
 
 # COROS 活动上传
@@ -42,7 +42,8 @@ npx -y --package coros-additional-mcp coros-auth import-token --region cn
 - `upload_activity`：明确确认后上传一个绝对路径的 `.fit`/`.tcx`，或其 base64 内容。
 - `list_import_jobs`：上传后查看导入任务是否完成或仍在处理。
 - `delete_import_job`：用户明确要求时，按 ID 从导入列表移除任务。
-- `list_activities`：**仅**核对刚上传的活动是否出现；日常活动查询使用官方 MCP 的 `querySportRecords`。
+- `download_activity`：按 `labelId` 下载 FIT/TCX/GPX/KML/CSV 到本地，只返回路径。`sportType` 用活动列表里的值，跑类以外不要省略。
+- `list_activities`：**仅**核对刚上传的活动，或查出下载所需的 `labelId`；日常活动查询使用官方 MCP 的 `querySportRecords`。
 
 ## 分阶段授权与写入确认
 

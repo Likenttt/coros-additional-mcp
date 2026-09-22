@@ -77,13 +77,14 @@ coros-auth status
 
 Credential priority is `COROS_ACCESS_TOKEN` → `COROS_TOKEN_FILE` → default token file → email/password. Authentication is lazy: the server starts and lists all tools with no credentials, while authenticated tools validate or log in on first use. `check_coros_auth` reports `authSource`, region, and user ID without printing or validating the token.
 
-The server registers five tools:
+The server registers six tools:
 
 - `check_coros_auth` — report auth source, in-memory login state, region, and user ID (never the token).
 - `upload_activity` — upload an absolute local `.fit`/`.tcx` file or base64 content. Files are limited to 50 MB. An import status other than `2` means it may still be processing; query `list_import_jobs`.
 - `list_import_jobs` — list recent activity import jobs.
 - `delete_import_job` — remove an import job by ID.
-- `list_activities` — check that a newly uploaded activity appeared. For routine activity queries, use the official MCP's `querySportRecords` tool instead.
+- `download_activity` — download one activity as FIT, TCX, GPX, KML, or CSV. `labelId` and `sportType` come from `list_activities`. The file is written locally with mode `0600`; the tool returns the path, not the bytes.
+- `list_activities` — check that a newly uploaded activity appeared, and look up the `labelId` needed for download. For routine activity queries, use the official MCP's `querySportRecords` tool instead.
 
 ### Getting `CPL-coros-token` from the browser
 

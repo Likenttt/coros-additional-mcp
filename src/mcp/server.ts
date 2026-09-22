@@ -12,10 +12,12 @@ import { formatToolError } from "./errors.ts";
 import {
     checkCorosAuthInputSchema,
     deleteImportJobInputSchema,
+    downloadActivityInputSchema,
     listActivitiesInputSchema,
     listImportJobsInputSchema,
     readValidatedActivityFile,
     uploadActivityInputSchema,
+    writeDownloadedActivity,
 } from "./validation.ts";
 
 export interface CorosMcpOptions extends AuthenticationResolutionOptions {
@@ -121,6 +123,18 @@ export class CorosSession {
         });
     }
 
+    async downloadActivity(input: {
+        labelId: string;
+        sportType?: number | string;
+        fileType: "fit" | "tcx" | "gpx" | "kml" | "csv";
+        outputPath?: string;
+    }): Promise<unknown> {
+        return await this.withAuthentication(async () => {
+            const bytes = await this.client.downloadActivityFile(input.labelId, input.fileType ?? "fit", input.sportType);
+            return await writeDownloadedActivity(bytes, input, this.options.env ?? process.env);
+        });
+    }
+
     async listActivities(options: { page: number; size: number; from?: string; to?: string; modeList?: string }): Promise<unknown> {
         const query: ActivityQueryOptions = {
             page: options.page,
@@ -196,6 +210,11 @@ export function createCorosMcpServer(options: CorosMcpOptions = {}): McpServer {
         description: "Remove an activity import job from the COROS import list by its import ID.",
         inputSchema: deleteImportJobInputSchema,
     }, async ({ importId }) => execute(() => session.deleteImportJob(importId), () => session.getSensitiveValues()));
+
+    server.registerTool("download_activity", {
+        description: "Download one COROS activity as FIT, TCX, GPX, KML, or CSV. labelId and sportType come from list_activities. Writes an owner-only local file and returns its path, never the file bytes.",
+        inputSchema: downloadActivityInputSchema,
+    }, async (input) => execute(() => session.downloadActivity(input), () => session.getSensitiveValues()));
 
     server.registerTool("list_activities", {
         description: "Check whether a newly uploaded activity appeared in COROS. For routine activity queries, use the official COROS MCP querySportRecords tool instead.",
