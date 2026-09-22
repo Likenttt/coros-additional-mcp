@@ -2,6 +2,12 @@
 
 > 一个基于 Node.js 20+ TypeScript 的库与 stdio MCP 服务器，对接非官方 COROS Training Hub API：支持账号/活动相关接口，并把 FIT/TCX 上传到与区域匹配的 AWS S3 或中国大陆阿里云 OSS 存储桶。
 
+[![npm 版本](https://img.shields.io/npm/v/coros-additional-mcp.svg?logo=npm)](https://www.npmjs.com/package/coros-additional-mcp)
+[![npm 下载量](https://img.shields.io/npm/dm/coros-additional-mcp.svg?logo=npm)](https://www.npmjs.com/package/coros-additional-mcp)
+[![CI](https://github.com/Likenttt/coros-additional-mcp/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/Likenttt/coros-additional-mcp/actions/workflows/ci.yml)
+[![Node.js](https://img.shields.io/badge/node-%3E%3D20-brightgreen.svg)](https://nodejs.org)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+
 **[English](README.md)** | 中文
 
 ## 对官方 COROS MCP 的补充

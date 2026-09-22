@@ -1,5 +1,11 @@
 # coros-additional-mcp
 
+[![npm version](https://img.shields.io/npm/v/coros-additional-mcp.svg?logo=npm)](https://www.npmjs.com/package/coros-additional-mcp)
+[![npm downloads](https://img.shields.io/npm/dm/coros-additional-mcp.svg?logo=npm)](https://www.npmjs.com/package/coros-additional-mcp)
+[![CI](https://github.com/Likenttt/coros-additional-mcp/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/Likenttt/coros-additional-mcp/actions/workflows/ci.yml)
+[![Node.js](https://img.shields.io/badge/node-%3E%3D20-brightgreen.svg)](https://nodejs.org)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+
 English | **[中文](README.zh-CN.md)**
 
 A Node.js 20+ TypeScript library and stdio MCP server for the unofficial COROS Training Hub API. It supports account/activity APIs and FIT/TCX uploads to the region-appropriate AWS S3 or mainland-China Aliyun OSS bucket.
