@@ -138,3 +138,5 @@ args = ["-y", "coros-additional-mcp"]
 `src/coros/md5.ts` 沿用了 Deno 标准库的 MD5 实现，由 `Pinta365/coros` 引入，仅改动了格式、导出的包装函数以及收窄的参数类型。MD5 没有 Web Crypto 对应实现，因此需要一份用户态实现。
 
 特别感谢 [XiaoSiHwang](https://github.com/XiaoSiHwang)（四哥），他的 [`garmin-sync-coros`](https://github.com/XiaoSiHwang/garmin-sync-coros) 最先摸清了中国大陆的上传路径。本项目沿用了他的思路并用 TypeScript 重新实现——这里的代码是从零写的，没有照抄。
+
+这里的凭据处理沿用了 [`dsh-plugin-garmin-connect`](https://github.com/Likenttt/garmin-connect-plugin-for-dsh) 的安全设计：密码只停留在厂商自己的登录页面上，本地只持久化一个会话 token，会话文件仅所有者可访问（目录 `0700`、文件 `0600`）且采用原子写入，token 绝不进入命令行参数、日志或错误信息。

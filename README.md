@@ -138,3 +138,5 @@ This project is a derivative of [`Pinta365/coros`](https://github.com/Pinta365/c
 `src/coros/md5.ts` carries the MD5 implementation from the Deno standard library, as vendored by `Pinta365/coros` and changed only in formatting, exported wrappers, and a narrowed parameter type. MD5 has no Web Crypto equivalent, so a userland implementation is required.
 
 Big thanks to [XiaoSiHwang](https://github.com/XiaoSiHwang) (四哥), whose [`garmin-sync-coros`](https://github.com/XiaoSiHwang/garmin-sync-coros) worked out the mainland-China upload path first. This project follows that approach and reimplements it in TypeScript — the code here is written from scratch, not copied.
+
+The credential handling here follows the security design of [`dsh-plugin-garmin-connect`](https://github.com/Likenttt/garmin-connect-plugin-for-dsh): the password stays on the vendor's own sign-in page, only a session token is persisted, the session file is owner-only (`0700` directory, `0600` file) and written atomically, and tokens never reach command-line arguments, logs, or error messages.
