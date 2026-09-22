@@ -54,21 +54,13 @@ console.log(result.importId, result.status, result.success);
 
 The `coros-additional-mcp` binary uses stdio and never returns a password or access token. The recommended setup stores only a browser session token in `~/.coros-additional-mcp/session.json`; its directory is mode `0700` and the file is mode `0600`.
 
-Authenticate once with the default manual paste flow:
+Authenticate once by bridging the session token from a signed-in browser:
 
 ```bash
 coros-auth import-token --region en
 # Paste CPL-coros-token at the hidden stdin prompt.
 coros-auth status
 ```
-
-Or explicitly ask the optional `ego-browser` integration to read cookies from an already signed-in Training Hub page:
-
-```bash
-coros-auth import-token --from-browser --region en
-```
-
-`ego-browser` is an optional enhancement and is not a package dependency. If it is not installed, use the default manual paste flow above.
 
 | Environment variable | Required | Description |
 | --- | --- | --- |
@@ -89,13 +81,7 @@ The server registers five tools:
 
 ### Getting `CPL-coros-token` from the browser
 
-The optional automatic flow requires `ego-browser` and only runs when explicitly requested:
-
-```bash
-coros-auth import-token --from-browser --region cn
-```
-
-It opens the region's Training Hub, reads the `CPL-coros-token` and `CPL-coros-region` cookies in memory, verifies the session, and stores it with owner-only permissions. A cookie region overrides a conflicting `--region` value with a warning. The token is never passed as a command-line argument. If `ego-browser` is not installed, use the default manual paste flow:
+The token is never passed as a command-line argument, and the CLI verifies it before saving:
 
 1. Sign in on the official Training Hub: [training.coros.com](https://training.coros.com) internationally, [trainingcn.coros.com](https://trainingcn.coros.com) in mainland China, or [trainingeu.coros.com](https://trainingeu.coros.com) in Europe.
 2. Open DevTools (`F12` or **Inspect**) and choose **Application** in Chrome/Edge, or **Storage** in Firefox.

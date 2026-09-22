@@ -54,21 +54,13 @@ console.log(result.importId, result.status, result.success);
 
 `coros-additional-mcp` 可执行文件使用 stdio，永不返回密码或访问令牌。推荐的配置方式只在 `~/.coros-additional-mcp/session.json` 中保存浏览器会话令牌；其目录权限为 `0700`，文件权限为 `0600`。
 
-先用默认的手动粘贴流程认证一次：
+先把已登录浏览器里的会话令牌桥接过来，认证一次：
 
 ```bash
 coros-auth import-token --region en
 # 在隐藏的 stdin 提示符处粘贴 CPL-coros-token。
 coros-auth status
 ```
-
-或者显式让可选的 `ego-browser` 集成从已登录的 Training Hub 页面读取 Cookie：
-
-```bash
-coros-auth import-token --from-browser --region en
-```
-
-`ego-browser` 是可选增强，不是包依赖。如果没装，就用上面的默认手动粘贴流程。
 
 | 环境变量 | 必填 | 说明 |
 | --- | --- | --- |
@@ -89,13 +81,7 @@ coros-auth import-token --from-browser --region en
 
 ### 从浏览器获取 `CPL-coros-token`
 
-可选的自动流程需要 `ego-browser`，且只在显式请求时才运行：
-
-```bash
-coros-auth import-token --from-browser --region cn
-```
-
-它会打开该区域的 Training Hub，在内存中读取 `CPL-coros-token` 和 `CPL-coros-region` Cookie，校验会话，然后以仅所有者可访问的权限保存。若 Cookie 中的区域与 `--region` 冲突，会以 Cookie 为准并给出警告。令牌绝不会作为命令行参数传递。如果没装 `ego-browser`，就用默认的手动粘贴流程：
+令牌绝不会作为命令行参数传递，CLI 会先校验再保存：
 
 1. 登录官方 Training Hub：国际区 [training.coros.com](https://training.coros.com)，中国大陆 [trainingcn.coros.com](https://trainingcn.coros.com)，欧洲 [trainingeu.coros.com](https://trainingeu.coros.com)。
 2. 打开开发者工具（`F12` 或 **检查**），在 Chrome/Edge 中选择 **Application**，在 Firefox 中选择 **Storage**。
