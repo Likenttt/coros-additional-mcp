@@ -3,7 +3,7 @@
  */
 
 export { CorosClient } from "./client.ts";
-export type { ActivityQueryOptions, ClientOptions } from "./client.ts";
+export type { ActivityQueryOptions, ClientOptions, ResolvedSession } from "./client.ts";
 export { ApiError, AuthError, HttpError } from "./errors.ts";
 export { buildUrl } from "./http.ts";
 export { formatYYYYMMDD } from "./date.ts";

@@ -1,6 +1,6 @@
 import { readFile } from "node:fs/promises";
 import { basename } from "node:path";
-import { AuthError } from "./errors.ts";
+import { ApiError, AuthError, HttpError } from "./errors.ts";
 import { buildUrl, fetchBytes, getJson, getVoid, postJson } from "./http.ts";
 import { login as doLogin } from "./auth.ts";
 import { getAccount } from "./api/account.ts";
@@ -83,8 +83,14 @@ export interface ClientOptions {
 /**
  * CorosClient — unofficial Node.js client for the COROS Training Hub API.
  */
+export interface ResolvedSession {
+    userId: string;
+    regionId: number;
+    region: ApiRegion;
+}
+
 export class CorosClient {
-    private readonly credentials: Credentials;
+    private readonly credentials: Credentials | undefined;
     private baseUrl: string;
     private uploadRegion: ApiRegion;
     private readonly configuredRegion: ApiRegion | undefined;
@@ -93,7 +99,7 @@ export class CorosClient {
     private readonly requestTimeoutMs: number | undefined;
     private _accessToken: string | undefined;
 
-    constructor(credentials: Credentials, options: ClientOptions = {}) {
+    constructor(credentials?: Credentials, options: ClientOptions = {}) {
         this.credentials = credentials;
         this.configuredRegion = options.region;
         this.configuredUploadRegion = options.uploadRegion;
@@ -127,6 +133,11 @@ export class CorosClient {
      * Log in and store the token on the client for subsequent requests.
      */
     async login(): Promise<User & { accessToken: string }> {
+        if (!this.credentials) {
+            throw new AuthError(
+                "Password login is not configured. Run `coros-auth import-token` to save a browser session.",
+            );
+        }
         // With no configured region, use the fixed CN host as a reverse-engineered
         // discovery endpoint. regionId in the response remains authoritative.
         const loginOptions = this.useDiscoveryLoginHost
@@ -152,7 +163,44 @@ export class CorosClient {
         return { ...user, accessToken } as User & { accessToken: string };
     }
 
-    /** Current API/storage region, updated from login's server-provided regionId. */
+    /**
+     * Validate a pre-set browser session token and adopt the account's region.
+     * This never falls back to password login when the token is rejected.
+     */
+    async resolveSession(): Promise<ResolvedSession> {
+        if (!this._accessToken) {
+            throw new AuthError(
+                "No COROS session token is configured. Run `coros-auth import-token`.",
+            );
+        }
+
+        let account: User;
+        try {
+            account = await getAccount(this.requestOptions);
+        } catch (error) {
+            if (error instanceof AuthError || error instanceof ApiError) throw invalidSessionError();
+            if (error instanceof HttpError && (error.status === 401 || error.status === 403)) {
+                throw invalidSessionError();
+            }
+            throw error;
+        }
+
+        const rawRegionId = account.regionId;
+        if ((typeof rawRegionId !== "number" && typeof rawRegionId !== "string") || !account.userId) {
+            throw invalidSessionError();
+        }
+        let region: ApiRegion;
+        try {
+            region = regionFromId(rawRegionId);
+        } catch {
+            throw invalidSessionError();
+        }
+        this.baseUrl = BASE_URL_BY_REGION[region];
+        this.uploadRegion = region;
+        return { userId: String(account.userId), regionId: Number(rawRegionId), region };
+    }
+
+    /** Current API/storage region, updated from login or session validation. */
     getRegion(): ApiRegion {
         return this.uploadRegion;
     }
@@ -399,4 +447,10 @@ export class CorosClient {
         const token = await loadTokenFromFileFs(filePath);
         this._accessToken = token;
     }
+}
+
+function invalidSessionError(): AuthError {
+    return new AuthError(
+        "COROS session token is invalid or expired. Run `coros-auth import-token` to bridge a new browser session.",
+    );
 }

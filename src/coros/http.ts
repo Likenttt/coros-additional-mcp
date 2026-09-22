@@ -99,7 +99,7 @@ async function request<T>(
     }
 
     if (body.result !== SUCCESS_RESULT) {
-        throw new ApiError(body.message ?? "Request failed", {
+        throw new ApiError(redactAccessToken(body.message ?? "Request failed", options.accessToken), {
             result: body.result,
             apiCode: body.apiCode,
             tlogId: "tlogId" in body ? (body as { tlogId?: string }).tlogId : undefined,
@@ -170,6 +170,10 @@ export function postForm<T>(url: string, formData: FormData, options: RequestOpt
  * Fetch raw bytes from an arbitrary URL (activity file downloads, which are
  * served from signed storage URLs rather than the API).
  */
+function redactAccessToken(message: string, accessToken: string | undefined): string {
+    return accessToken ? message.split(accessToken).join("[redacted]") : message;
+}
+
 export async function fetchBytes(url: string, timeoutMs?: number): Promise<Uint8Array> {
     const controller = new AbortController();
     const timeoutId = timeoutMs !== undefined ? setTimeout(() => controller.abort(), timeoutMs) : undefined;
