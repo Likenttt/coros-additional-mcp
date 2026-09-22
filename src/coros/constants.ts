@@ -9,6 +9,13 @@ export const BASE_URL_BY_REGION: Record<ApiRegion, string> = {
 
 export const DEFAULT_BASE_URL = BASE_URL_BY_REGION.en;
 
+/** Official Training Hub origin used to obtain the browser session cookie. */
+export const TRAINING_HUB_URL_BY_REGION: Record<ApiRegion, string> = {
+    en: "https://training.coros.com",
+    eu: "https://trainingeu.coros.com",
+    cn: "https://trainingcn.coros.com",
+};
+
 /** Issues the temporary S3 credentials used for upload. */
 export const FAQ_API_URL = "https://faq.coros.com";
 

@@ -198,7 +198,7 @@ export function createCorosMcpServer(options: CorosMcpOptions = {}): McpServer {
     }, async ({ importId }) => execute(() => session.deleteImportJob(importId), () => session.getSensitiveValues()));
 
     server.registerTool("list_activities", {
-        description: "List COROS activities, optionally paginated and filtered by date range or sport mode.",
+        description: "Check whether a newly uploaded activity appeared in COROS. For routine activity queries, use the official COROS MCP querySportRecords tool instead.",
         inputSchema: listActivitiesInputSchema,
     }, async (input) => execute(() => session.listActivities(input), () => session.getSensitiveValues()));
 

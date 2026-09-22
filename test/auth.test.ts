@@ -1,4 +1,4 @@
-import { chmod, mkdtemp, stat } from "node:fs/promises";
+import { chmod, mkdtemp, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { Writable } from "node:stream";
@@ -37,6 +37,21 @@ function capture() {
         },
     });
     return { stream, text: () => value };
+}
+
+async function fakeEgoBrowserEnvironment(home: string, stdout: string) {
+    const bin = await mkdtemp(join(tmpdir(), "fake-ego-browser-"));
+    const executable = join(bin, "ego-browser");
+    await writeFile(executable, `#!/usr/bin/env node
+process.stdout.write(process.env.FAKE_EGO_STDOUT || "");
+process.exit(Number(process.env.FAKE_EGO_EXIT_CODE || "0"));
+`, { mode: 0o755 });
+    await chmod(executable, 0o755);
+    return {
+        HOME: home,
+        PATH: `${bin}:${process.env.PATH ?? ""}`,
+        FAKE_EGO_STDOUT: stdout,
+    };
 }
 
 describe("owner-only COROS token store", () => {
@@ -155,6 +170,134 @@ describe("token-only session validation", () => {
         expect(successCode).toBe(0);
         expect(successOutput.text() + successErrors.text()).not.toContain(token);
     }, 10_000);
+});
+
+describe("coros-auth import-token --from-browser", () => {
+    it("prints the complete manual fallback when ego-browser is unavailable", async () => {
+        const home = await mkdtemp(join(tmpdir(), "coros-browser-missing-home-"));
+        const emptyPath = await mkdtemp(join(tmpdir(), "coros-browser-missing-path-"));
+        const output = capture();
+        const errors = capture();
+
+        const exitCode = await runCorosAuthCli({
+            argv: ["import-token", "--from-browser"],
+            env: { HOME: home, PATH: emptyPath },
+            output: output.stream,
+            errorOutput: errors.stream,
+        });
+
+        expect(exitCode).toBe(1);
+        expect(errors.text()).toContain("未检测到 ego-browser，请改用默认的手动粘贴方式");
+        expect(errors.text()).toContain("Manual token import:");
+        expect(errors.text()).toContain("coros-auth import-token --region <en|eu|cn>");
+        expect(output.text()).toBe("");
+    });
+
+    it("parses a prefixed JSON result among ego-browser noise", async () => {
+        const token = "browser-noise-secret";
+        const home = await mkdtemp(join(tmpdir(), "coros-browser-noise-"));
+        const env = await fakeEgoBrowserEnvironment(home, [
+            "[ego-browser:notice] harmless diagnostic",
+            `COROS_AUTH_BROWSER_RESULT=${JSON.stringify({ token, regionId: "2" })}`,
+            "another noise line",
+        ].join("\n"));
+        const output = capture();
+        const errors = capture();
+        let validatedRegion: string | undefined;
+
+        const exitCode = await runCorosAuthCli({
+            argv: ["import-token", "--from-browser", "--region", "cn"],
+            env,
+            output: output.stream,
+            errorOutput: errors.stream,
+            validateToken: async (receivedToken, region) => {
+                expect(receivedToken).toBe(token);
+                validatedRegion = region;
+                return { userId: "browser-user", regionId: 2, region: "cn" };
+            },
+        });
+
+        expect(exitCode).toBe(0);
+        expect(validatedRegion).toBe("cn");
+        expect((await readTokenFile(defaultTokenFilePath(env)))?.accessToken).toBe(token);
+        expect(output.text() + errors.text()).not.toContain(token);
+        expect(output.text()).not.toContain("ego-browser:notice");
+    });
+
+    it("explains how to recover when the browser cookie is missing", async () => {
+        const tokenThatMustNotLeak = "diagnostic-secret";
+        const home = await mkdtemp(join(tmpdir(), "coros-browser-cookie-missing-"));
+        const env = await fakeEgoBrowserEnvironment(home, [
+            `[ego-browser:notice] ${tokenThatMustNotLeak}`,
+            `COROS_AUTH_BROWSER_RESULT=${JSON.stringify({ token: null, regionId: null })}`,
+        ].join("\n"));
+        const output = capture();
+        const errors = capture();
+
+        const exitCode = await runCorosAuthCli({
+            argv: ["import-token", "--from-browser"],
+            env,
+            output: output.stream,
+            errorOutput: errors.stream,
+        });
+
+        expect(exitCode).toBe(1);
+        expect(errors.text()).toContain("请先在浏览器里登录 Training Hub 再重试");
+        expect(errors.text()).toContain("https://training.coros.com");
+        expect(output.text() + errors.text()).not.toContain(tokenThatMustNotLeak);
+    });
+
+    it("warns and gives the browser cookie region precedence", async () => {
+        const token = "browser-region-secret";
+        const home = await mkdtemp(join(tmpdir(), "coros-browser-region-"));
+        const env = await fakeEgoBrowserEnvironment(
+            home,
+            `COROS_AUTH_BROWSER_RESULT=${JSON.stringify({ token, regionId: "2" })}\n`,
+        );
+        const output = capture();
+        const errors = capture();
+        let validatedRegion: string | undefined;
+
+        const exitCode = await runCorosAuthCli({
+            argv: ["import-token", "--region", "en", "--from-browser"],
+            env,
+            output: output.stream,
+            errorOutput: errors.stream,
+            validateToken: async (_receivedToken, region) => {
+                validatedRegion = region;
+                return { userId: "browser-user", regionId: 2, region: "cn" };
+            },
+        });
+
+        expect(exitCode).toBe(0);
+        expect(validatedRegion).toBe("cn");
+        expect(errors.text()).toContain("warning=CPL-coros-region indicates cn; overriding --region en");
+        expect(output.text() + errors.text()).not.toContain(token);
+    });
+
+    it("does not print a browser token when validation fails", async () => {
+        const token = "browser-validation-secret";
+        const home = await mkdtemp(join(tmpdir(), "coros-browser-redaction-"));
+        const env = await fakeEgoBrowserEnvironment(
+            home,
+            `COROS_AUTH_BROWSER_RESULT=${JSON.stringify({ token, regionId: "1" })}\n`,
+        );
+        const output = capture();
+        const errors = capture();
+
+        const exitCode = await runCorosAuthCli({
+            argv: ["import-token", "--from-browser"],
+            env,
+            output: output.stream,
+            errorOutput: errors.stream,
+            validateToken: async () => {
+                throw new Error(`validation echoed ${token}`);
+            },
+        });
+
+        expect(exitCode).toBe(1);
+        expect(output.text() + errors.text()).not.toContain(token);
+    });
 });
 
 describe("coros-auth status", () => {

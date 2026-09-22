@@ -1,10 +1,11 @@
 #!/usr/bin/env node
 
+import { spawn } from "node:child_process";
 import type { Readable, Writable } from "node:stream";
 import { pathToFileURL } from "node:url";
 import { AuthError, HttpError } from "../coros/errors.ts";
 import { CorosClient, type ResolvedSession } from "../coros/client.ts";
-import type { ApiRegion } from "../coros/constants.ts";
+import { TRAINING_HUB_URL_BY_REGION, type ApiRegion } from "../coros/constants.ts";
 import {
     defaultTokenFilePath,
     deleteTokenFile,
@@ -15,34 +16,56 @@ import {
     writeTokenFile,
 } from "./token-store.ts";
 
+const MANUAL_IMPORT_GUIDE = `Manual token import:
+  1. Sign in on the official Training Hub: https://training.coros.com,
+     https://trainingcn.coros.com (mainland China), or
+     https://trainingeu.coros.com (Europe).
+  2. Open browser DevTools, then Application (Chrome/Edge) or Storage (Firefox).
+  3. Open Cookies for the Training Hub origin.
+  4. Copy only the CPL-coros-token value. CPL-coros-region maps as 1=en,
+     2=cn, and 3=eu.
+  5. Run coros-auth import-token --region <en|eu|cn>, paste the token at the
+     hidden stdin prompt, and press Enter.`;
+
 const HELP = `COROS browser-session bridge
 
 Usage:
-  coros-auth import-token [--region en|eu|cn]
+  coros-auth import-token [--region en|eu|cn] [--from-browser]
   coros-auth status
   coros-auth logout
   coros-auth --help
 
-import-token reads CPL-coros-token from stdin only. Never pass a token as a
-command-line argument. The token is verified with COROS before an owner-only
-session file is written. Region defaults to en; use --region cn for mainland
-China or --region eu for Europe.
+By default, import-token reads CPL-coros-token from stdin. The optional
+--from-browser mode asks an installed ego-browser to read cookies from an
+already signed-in Training Hub page. Never pass a token as a command-line
+argument. The token is verified with COROS before an owner-only session file is
+written. Region defaults to en; use --region cn for mainland China or --region
+eu for Europe. A valid CPL-coros-region browser cookie takes precedence over
+--region.
 
-How to obtain the token:
-  1. Sign in on the official Training Hub: https://training.coros.com, or
-     https://trainingcn.coros.com for mainland China.
-  2. Open browser DevTools, then Application (Chrome/Edge) or Storage (Firefox).
-  3. Open Local Storage / Cookies for the Training Hub origin.
-  4. Copy the value named CPL-coros-token. CPL-coros-region is 1=en, 2=cn,
-     3=eu and can be translated to the matching --region value.
-  5. Run coros-auth import-token --region <en|eu|cn>, paste the token at the
-     hidden stdin prompt, and press Enter.
+${MANUAL_IMPORT_GUIDE}
 
 Environment:
   COROS_ACCESS_TOKEN  Highest-priority in-memory token (not persisted)
   COROS_TOKEN_FILE    Override the session file path
   COROS_REGION        Region for COROS_ACCESS_TOKEN or password login
 `;
+
+const BROWSER_RESULT_PREFIX = "COROS_AUTH_BROWSER_RESULT=";
+const BROWSER_TIMEOUT_MS = 90_000;
+const MAX_BROWSER_OUTPUT_BYTES = 2 * 1024 * 1024;
+
+interface ImportArguments {
+    region: ApiRegion;
+    regionWasSpecified: boolean;
+    fromBrowser: boolean;
+}
+
+interface BrowserCookieResult {
+    token: string;
+    region?: ApiRegion;
+    url: string;
+}
 
 export interface CorosAuthCliOptions {
     argv: string[];
@@ -69,14 +92,32 @@ export async function runCorosAuthCli(options: CorosAuthCliOptions): Promise<num
 
     try {
         if (command === "import-token") {
-            const region = parseImportArgs(args);
-            const token = (await (options.readToken
-                ? options.readToken()
-                : readTokenFromStdin(options.input ?? process.stdin, errorOutput))).trim();
-            if (!token) throw new CliUsageError("No token was provided on stdin.");
-            sensitiveValues.push(token);
+            const importArguments = parseImportArgs(args);
+            let region = importArguments.region;
+            let token: string;
+
+            if (importArguments.fromBrowser) {
+                const browserResult = await readTokenFromBrowser(region, env);
+                token = browserResult.token.trim();
+                sensitiveValues.push(token);
+                if (browserResult.region) {
+                    if (importArguments.regionWasSpecified && browserResult.region !== region) {
+                        errorOutput.write(
+                            `warning=CPL-coros-region indicates ${browserResult.region}; overriding --region ${region}.\n`,
+                        );
+                    }
+                    region = browserResult.region;
+                }
+            } else {
+                token = (await (options.readToken
+                    ? options.readToken()
+                    : readTokenFromStdin(options.input ?? process.stdin, errorOutput))).trim();
+                if (!token) throw new CliUsageError("No token was provided on stdin.");
+                sensitiveValues.push(token);
+            }
+
             if (Buffer.byteLength(token, "utf8") > 16 * 1024) {
-                throw new CliUsageError("The token read from stdin is too large.");
+                throw new CliUsageError("The imported token is too large.");
             }
             const validate = options.validateToken ?? validateSessionToken;
             const session = await validate(token, region);
@@ -165,18 +206,162 @@ async function validateSessionToken(token: string, region: ApiRegion): Promise<R
     return await client.resolveSession();
 }
 
-function parseImportArgs(args: string[]): ApiRegion {
+function parseImportArgs(args: string[]): ImportArguments {
     let region: ApiRegion = "en";
-    if (args.length === 0) return region;
-    if (args.length !== 2 || args[0] !== "--region") {
-        throw new CliUsageError("Usage: coros-auth import-token [--region en|eu|cn]");
+    let regionWasSpecified = false;
+    let fromBrowser = false;
+
+    for (let index = 0; index < args.length; index += 1) {
+        const argument = args[index];
+        if (argument === "--from-browser" && !fromBrowser) {
+            fromBrowser = true;
+            continue;
+        }
+        if (argument === "--region" && !regionWasSpecified) {
+            const value = args[index + 1];
+            if (value !== "en" && value !== "eu" && value !== "cn") {
+                throw new CliUsageError("Region must be en, eu, or cn.");
+            }
+            region = value;
+            regionWasSpecified = true;
+            index += 1;
+            continue;
+        }
+        throw new CliUsageError(
+            "Usage: coros-auth import-token [--region en|eu|cn] [--from-browser]",
+        );
     }
-    const value = args[1];
-    if (value !== "en" && value !== "eu" && value !== "cn") {
-        throw new CliUsageError("Region must be en, eu, or cn.");
+
+    return { region, regionWasSpecified, fromBrowser };
+}
+
+async function readTokenFromBrowser(
+    requestedRegion: ApiRegion,
+    env: Record<string, string | undefined>,
+): Promise<BrowserCookieResult> {
+    const url = TRAINING_HUB_URL_BY_REGION[requestedRegion];
+    const script = `const task = await taskSpace("COROS session import");
+const page = task.page("p1");
+await page.goto(${JSON.stringify(url)});
+await page.waitForTimeout(5000);
+const result = await page.evaluate(() => {
+  const cookies = Object.create(null);
+  for (const part of document.cookie.split(";")) {
+    const separator = part.indexOf("=");
+    if (separator < 0) continue;
+    cookies[part.slice(0, separator).trim()] = part.slice(separator + 1).trim();
+  }
+  return {
+    token: cookies["CPL-coros-token"] ?? null,
+    regionId: cookies["CPL-coros-region"] ?? null,
+  };
+});
+console.log(${JSON.stringify(BROWSER_RESULT_PREFIX)} + JSON.stringify(result));`;
+
+    const stdout = await runEgoBrowser(script, env);
+    const markerLine = stdout
+        .split(/\r?\n/u)
+        .reverse()
+        .find((line) => line.startsWith(BROWSER_RESULT_PREFIX));
+    if (!markerLine) {
+        throw new CliUsageError(
+            "ego-browser did not return a readable cookie result. No token was saved.",
+        );
     }
-    region = value;
-    return region;
+
+    let parsed: unknown;
+    try {
+        parsed = JSON.parse(markerLine.slice(BROWSER_RESULT_PREFIX.length));
+    } catch {
+        throw new CliUsageError(
+            "ego-browser returned an unreadable cookie result. No token was saved.",
+        );
+    }
+    if (!isRecord(parsed) || typeof parsed.token !== "string" || parsed.token.trim() === "") {
+        throw new CliUsageError(
+            `No COROS session cookie was found. 请先在浏览器里登录 Training Hub 再重试。 Opened: ${url}`,
+        );
+    }
+
+    return {
+        token: parsed.token,
+        region: browserRegion(parsed.regionId),
+        url,
+    };
+}
+
+async function runEgoBrowser(
+    script: string,
+    env: Record<string, string | undefined>,
+): Promise<string> {
+    return await new Promise<string>((resolve, reject) => {
+        const child = spawn("ego-browser", ["nodejs", "-e", script], {
+            env,
+            stdio: ["ignore", "pipe", "pipe"],
+        });
+        let stdout = "";
+        let settled = false;
+        let timedOut = false;
+        let outputTooLarge = false;
+        const finish = (operation: () => void) => {
+            if (settled) return;
+            settled = true;
+            clearTimeout(timer);
+            operation();
+        };
+        const timer = setTimeout(() => {
+            timedOut = true;
+            child.kill("SIGKILL");
+        }, BROWSER_TIMEOUT_MS);
+
+        child.stdout.on("data", (chunk: Buffer | string) => {
+            if (outputTooLarge) return;
+            stdout += chunk.toString();
+            if (Buffer.byteLength(stdout, "utf8") > MAX_BROWSER_OUTPUT_BYTES) {
+                outputTooLarge = true;
+                stdout = "";
+                child.kill("SIGKILL");
+            }
+        });
+        // Drain diagnostics but never relay them: browser output may contain a token.
+        child.stderr.resume();
+        child.on("error", (error: NodeJS.ErrnoException) => finish(() => {
+            if (error.code === "ENOENT") {
+                reject(new CliUsageError(
+                    `ego-browser was not detected in PATH. 未检测到 ego-browser，请改用默认的手动粘贴方式。\n\n${MANUAL_IMPORT_GUIDE}`,
+                ));
+                return;
+            }
+            reject(new CliUsageError("ego-browser could not be started. No token was saved."));
+        }));
+        child.on("close", (code) => finish(() => {
+            if (timedOut) {
+                reject(new CliUsageError(
+                    "ego-browser timed out after 90 seconds and was stopped. No token was saved.",
+                ));
+            } else if (outputTooLarge) {
+                reject(new CliUsageError("ego-browser produced too much output. No token was saved."));
+            } else if (code !== 0) {
+                reject(new CliUsageError(
+                    "ego-browser could not read the Training Hub session. No token was saved.",
+                ));
+            } else {
+                resolve(stdout);
+            }
+        }));
+    });
+}
+
+function browserRegion(value: unknown): ApiRegion | undefined {
+    if (value === undefined || value === null || value === "") return undefined;
+    if (value === 1 || value === "1") return "en";
+    if (value === 2 || value === "2") return "cn";
+    if (value === 3 || value === "3") return "eu";
+    throw new CliUsageError("The CPL-coros-region browser cookie is not recognized.");
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+    return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
 function rejectArguments(args: string[], command: string): void {
